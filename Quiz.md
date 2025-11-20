@@ -118,46 +118,46 @@ xmal
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
     Title="App1">
-    <Grid RowDefinitions="Auto,*" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-        <!-- Toolbar -->
-        <Grid Grid.Row="0" Padding="8" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" VerticalAlignment="Center">
-            <!-- 색상 -->
-            <Button x:Name="ColorButton" Content="색상" Margin="0,0,8,0">
-                <Button.Flyout>
-                    <Flyout x:Name="ColorFlyout">
-                        <StackPanel Spacing="8" Width="260">
-                            <ColorPicker x:Name="PenColorPicker" ColorChanged="PenColorPicker_ColorChanged"/>
-                            <Rectangle x:Name="ColorPreview" Height="24" RadiusX="6" RadiusY="6"/>
-                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-                                <Button x:Name="ApplyColorButton" Content="적용" Click="ApplyColorButton_Click"/>
-                                <Button Content="닫기" Click="CloseColorFlyout_Click"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Flyout>
-                </Button.Flyout>
-            </Button>
+	<Grid RowDefinitions="Auto,*" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+		<!-- Toolbar -->
+		<Grid Grid.Row="0" Padding="8" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" VerticalAlignment="Center">
+			<!-- 색상 -->
+			<Button x:Name="ColorButton" Content="색상" Margin="0,0,8,0">
+				<Button.Flyout>
+					<Flyout x:Name="ColorFlyout">
+						<StackPanel Spacing="8" Width="260">
+							<ColorPicker x:Name="PenColorPicker" ColorChanged="PenColorPicker_ColorChanged"/>
+							<Rectangle x:Name="ColorPreview" Height="24" RadiusX="6" RadiusY="6"/>
+							<StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+								<Button x:Name="ApplyColorButton" Content="적용" Click="ApplyColorButton_Click"/>
+								<Button Content="닫기" Click="CloseColorFlyout_Click"/>
+							</StackPanel>
+						</StackPanel>
+					</Flyout>
+				</Button.Flyout>
+			</Button>
 
-            <!-- 두께 -->
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="두께" VerticalAlignment="Center"/>
-                <Slider x:Name="ThicknessSlider" Minimum="2" Maximum="64" Value="2"
+			<!-- 두께 -->
+			<StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+				<TextBlock Text="두께" VerticalAlignment="Center"/>
+				<Slider x:Name="ThicknessSlider" Minimum="2" Maximum="64" Value="2"
                 Width="200" ValueChanged="ThicknessSlider_ValueChanged"/>
-                <TextBlock x:Name="ThicknessValueText" VerticalAlignment="Center" Text="2.0 px"/>
-            </StackPanel>
+				<TextBlock x:Name="ThicknessValueText" VerticalAlignment="Center" Text="2.0 px"/>
+			</StackPanel>
 
-            <!-- 저장/불러오기/지우기 -->
-            <Button Grid.Column="2" x:Name="SaveButton" Content="저장" Margin="8,0,0,0" Click="SaveButton_Click"/>
-            <Button Grid.Column="3" x:Name="LoadButton" Content="불러오기" Margin="8,0,0,0" Click="LoadButton_Click"/>
-            <Button Grid.Column="4" x:Name="ClearButton" Content="지우기" Margin="8,0,0,0" Click="ClearButton_Click"/>
+			<!-- 저장/불러오기/지우기 -->
+			<Button Grid.Column="2" x:Name="SaveButton" Content="저장" Margin="8,0,0,0" Click="SaveButton_Click"/>
+			<Button Grid.Column="3" x:Name="LoadButton" Content="불러오기" Margin="8,0,0,0" Click="LoadButton_Click"/>
+			<Button Grid.Column="4" x:Name="ClearButton" Content="지우기" Margin="8,0,0,0" Click="ClearButton_Click"/>
 
-        </Grid>
+		</Grid>
 
-        <!-- Drawing Area -->
-        <Canvas x:Name="DrawCanvas" Grid.Row="1" Background="White"
+		<!-- Drawing Area -->
+		<Canvas x:Name="DrawCanvas" Grid.Row="1" Background="White"
             PointerPressed="DrawCanvas_PointerPressed"
             PointerMoved="DrawCanvas_PointerMoved"
             PointerReleased="DrawCanvas_PointerReleased"/>
-    </Grid>
+	</Grid>
 </Window>
 ```
 
@@ -196,9 +196,6 @@ xmal.h
 #ifdef max
 #undef max
 #endif
-
-// ONNX Runtime
-#include <onnxruntime_cxx_api.h>
 
 namespace winrt::Q2_2::implementation
 {
@@ -270,7 +267,7 @@ namespace winrt::Q2_2::implementation
     };
 }
 
-namespace winrt::App1::factory_implementation
+namespace winrt::Q2_2::factory_implementation
 {
     struct MainWindow : MainWindowT<MainWindow, implementation::MainWindow>
     {
@@ -312,9 +309,6 @@ xmal.cpp
 #include <numeric>
 #include <cmath>
 
-// ONNX Runtime
-#include <onnxruntime_cxx_api.h>
-
 using namespace winrt;
 using namespace Microsoft::UI::Xaml;
 using namespace Microsoft::UI::Xaml::Controls;
@@ -327,243 +321,7 @@ using Windows::Data::Json::JsonObject;
 using Windows::Data::Json::JsonValue;
 using Windows::Foundation::IAsyncAction;
 
-namespace
-{
-    // ONNX Runtime Env는 한 번만 초기화
-    Ort::Env& GetOrtEnv()
-    {
-        static Ort::Env env{ ORT_LOGGING_LEVEL_WARNING, "App1" };
-        return env;
-    }
-
-    // BGRA -> (반전) 그레이스케일 [0..1]
-    inline float inv_gray_from_BGRA(uint8_t B, uint8_t G, uint8_t R)
-    {
-        float gray = 0.2126f * R + 0.7152f * G + 0.0722f * B; // ITU-R BT.709
-        float v = (255.0f - gray) / 255.0f;                  // 배경 0, 선 1
-        if (v < 0.f) v = 0.f;
-        if (v > 1.f) v = 1.f;
-        return v;
-    }
-
-    // 외접 박스 계산: 값이 thresh 이상인 픽셀만 "그림"으로 간주
-    inline bool compute_bbox(const std::vector<uint8_t>& src, int w, int h,
-        float thresh, int& x0, int& y0, int& x1, int& y1)
-    {
-        x0 = y0 = (std::numeric_limits<int>::max)();
-        x1 = y1 = (std::numeric_limits<int>::min)();
-        bool found = false;
-
-        for (int y = 0; y < h; ++y)
-        {
-            const size_t row = static_cast<size_t>(y) * w * 4;
-            for (int x = 0; x < w; ++x)
-            {
-                size_t idx = row + static_cast<size_t>(x) * 4;
-                float v = inv_gray_from_BGRA(src[idx + 0], src[idx + 1], src[idx + 2]);
-                if (v >= thresh)
-                {
-                    found = true;
-                    if (x < x0) x0 = x;
-                    if (x > x1) x1 = x;
-                    if (y < y0) y0 = y;
-                    if (y > y1) y1 = y;
-                }
-            }
-        }
-        return found;
-    }
-
-    // 28×28 bilinear 리샘플 (원본은 BGRA8, [0..1] 반전 그레이로 변환)
-    inline void resample_bilinear_28_from_bgra(
-        const std::vector<uint8_t>& src, int w, int h,
-        float sx0, float sy0, float side,
-        std::vector<float>& out28)
-    {
-        const int D = 28;
-        out28.assign(D * D, 0.0f);
-        if (side <= 1.f) side = 1.f;
-
-        const float scale = side / static_cast<float>(D); // src pixels per 1 output pixel
-        for (int oy = 0; oy < D; ++oy)
-        {
-            float sy = sy0 + (oy + 0.5f) * scale - 0.5f;
-            int   y0 = static_cast<int>(std::floor(sy));
-            float wy = sy - y0;
-
-            if (y0 < 0) { y0 = 0; wy = 0.f; }
-            if (y0 >= h - 1) { y0 = h - 2; wy = 1.f; }
-
-            for (int ox = 0; ox < D; ++ox)
-            {
-                float sx = sx0 + (ox + 0.5f) * scale - 0.5f;
-                int   x0 = static_cast<int>(std::floor(sx));
-                float wx = sx - x0;
-
-                if (x0 < 0) { x0 = 0; wx = 0.f; }
-                if (x0 >= w - 1) { x0 = w - 2; wx = 1.f; }
-
-                auto sample = [&](int px, int py) -> float
-                    {
-                        size_t idx = (static_cast<size_t>(py) * w + px) * 4;
-                        return inv_gray_from_BGRA(src[idx + 0], src[idx + 1], src[idx + 2]);
-                    };
-
-                float v00 = sample(x0, y0);
-                float v10 = sample(x0 + 1, y0);
-                float v01 = sample(x0, y0 + 1);
-                float v11 = sample(x0 + 1, y0 + 1);
-
-                float v0 = v00 + wx * (v10 - v00);
-                float v1 = v01 + wx * (v11 - v01);
-                float v = v0 + wy * (v1 - v0);
-
-                out28[oy * D + ox] = std::clamp(v, 0.f, 1.f);
-            }
-        }
-    }
-
-    // 가우시안 블러 (5x5, sigma≈1.0) — separable
-    inline void gaussian_blur_5x5(std::vector<float>& img28)
-    {
-        const int D = 28;
-        static const float k[5] = { 0.06136f, 0.24477f, 0.38774f, 0.24477f, 0.06136f }; // 정규화됨
-        std::vector<float> tmp(img28.size(), 0.f);
-
-        // horizontal
-        for (int y = 0; y < D; ++y)
-        {
-            for (int x = 0; x < D; ++x)
-            {
-                float acc = 0.f;
-                for (int t = -2; t <= 2; ++t)
-                {
-                    int xx = std::clamp(x + t, 0, D - 1);
-                    acc += img28[y * D + xx] * k[t + 2];
-                }
-                tmp[y * D + x] = acc;
-            }
-        }
-        // vertical
-        for (int y = 0; y < D; ++y)
-        {
-            for (int x = 0; x < D; ++x)
-            {
-                float acc = 0.f;
-                for (int t = -2; t <= 2; ++t)
-                {
-                    int yy = std::clamp(y + t, 0, D - 1);
-                    acc += tmp[yy * D + x] * k[t + 2];
-                }
-                img28[y * D + x] = acc;
-            }
-        }
-    }
-
-    // Otsu 임계값 계산 (입력 [0..1])
-    inline float otsu_threshold_0_1(const std::vector<float>& img28)
-    {
-        const int bins = 256;
-        std::array<int, bins> hist{}; hist.fill(0);
-        for (float v : img28)
-        {
-            int b = static_cast<int>(std::round(std::clamp(v, 0.f, 1.f) * 255.f));
-            hist[b]++;
-        }
-        const int N = static_cast<int>(img28.size());
-        double sumAll = 0.0;
-        for (int i = 0; i < bins; ++i) sumAll += i * hist[i];
-
-        int wB = 0;        // weight background
-        int wF = 0;        // weight foreground
-        double sumB = 0.0; // sum background
-        double maxVar = -1.0;
-        int bestT = 128;
-
-        for (int t = 0; t < bins; ++t)
-        {
-            wB += hist[t];
-            if (wB == 0) continue;
-            wF = N - wB;
-            if (wF == 0) break;
-
-            sumB += t * hist[t];
-            double mB = sumB / wB;
-            double mF = (sumAll - sumB) / wF;
-
-            double between = static_cast<double>(wB) * wF * (mB - mF) * (mB - mF);
-            if (between > maxVar) { maxVar = between; bestT = t; }
-        }
-        return static_cast<float>(bestT / 255.0);
-    }
-
-    // 질량중심(무게중심) 계산 (mask 또는 그레이스케일)
-    inline std::pair<double, double> centroid(const std::vector<float>& img28)
-    {
-        const int D = 28;
-        double sum = 0.0, mx = 0.0, my = 0.0;
-        for (int y = 0; y < D; ++y)
-        {
-            for (int x = 0; x < D; ++x)
-            {
-                double v = img28[y * D + x];
-                sum += v;
-                mx += v * x;
-                my += v * y;
-            }
-        }
-        if (sum <= 1e-8) return { 13.5, 13.5 }; // 중앙
-        return { mx / sum, my / sum };
-    }
-
-    // 28×28 평행이동(서브픽셀, bilinear 샘플링)
-    inline void translate_bilinear_28(const std::vector<float>& src, double dx, double dy, std::vector<float>& dst)
-    {
-        const int D = 28;
-        dst.assign(D * D, 0.f);
-        for (int y = 0; y < D; ++y)
-        {
-            double sy = y - dy;
-            int y0 = static_cast<int>(std::floor(sy));
-            double wy = sy - y0;
-
-            if (y0 < 0) { y0 = 0; wy = 0.0; }
-            if (y0 >= D - 1) { y0 = D - 2; wy = 1.0; }
-
-            for (int x = 0; x < D; ++x)
-            {
-                double sx = x - dx;
-                int x0 = static_cast<int>(std::floor(sx));
-                double wx = sx - x0;
-
-                if (x0 < 0) { x0 = 0; wx = 0.0; }
-                if (x0 >= D - 1) { x0 = D - 2; wx = 1.0; }
-
-                auto smp = [&](int px, int py) -> float { return src[py * D + px]; };
-
-                double v00 = smp(x0, y0);
-                double v10 = smp(x0 + 1, y0);
-                double v01 = smp(x0, y0 + 1);
-                double v11 = smp(x0 + 1, y0 + 1);
-
-                double v0 = v00 + wx * (v10 - v00);
-                double v1 = v01 + wx * (v11 - v01);
-                double v = v0 + wy * (v1 - v0);
-
-                dst[y * D + x] = static_cast<float>(std::clamp(v, 0.0, 1.0));
-            }
-        }
-    }
-
-    // z-score 표준화 (전체 픽셀 단위)
-    inline void zscore_normalize(std::vector<float>& img28, float mean, float stddev)
-    {
-        if (stddev <= 1e-6f) stddev = 1.f;
-        for (auto& v : img28) v = (v - mean) / stddev;
-    }
-}
-
-namespace winrt::App1::implementation
+namespace winrt::Q2_2::implementation
 {
     MainWindow::MainWindow()
     {
@@ -902,89 +660,6 @@ namespace winrt::App1::implementation
         m_currentStroke = nullptr;
         m_currentData = {};
         m_strokes.clear();
-    }
-
-    // ----- 캔버스 → 28x28 float 텐서 (전처리 포함) -----
-    Windows::Foundation::IAsyncOperation<bool>
-        MainWindow::TryRenderToMnistTensor(std::vector<float>& outTensor28x28)
-    {
-        auto canvas = this->DrawCanvas();
-        if (!canvas) co_return false;
-
-        // UI 스레드에서 렌더
-        co_await m_ui;
-
-        RenderTargetBitmap rtb;
-        co_await rtb.RenderAsync(canvas);
-
-        const int srcW = rtb.PixelWidth();
-        const int srcH = rtb.PixelHeight();
-        if (srcW <= 0 || srcH <= 0) co_return false;
-
-        auto ibuf = co_await rtb.GetPixelsAsync(); // BGRA8
-        auto reader = Windows::Storage::Streams::DataReader::FromBuffer(ibuf);
-        std::vector<uint8_t> src(ibuf.Length());
-        reader.ReadBytes(array_view<uint8_t>(src));
-
-        // 1) 외접 박스
-        int bx0, by0, bx1, by1;
-        constexpr float THRESH = 0.05f; // 5% 이상만 "획"으로 간주
-        bool found = compute_bbox(src, srcW, srcH, THRESH, bx0, by0, bx1, by1);
-
-        // 2) 외접 박스 없으면 전체 프레임 리샘플
-        float sx0 = 0.f, sy0 = 0.f, side = static_cast<float>(std::min(srcW, srcH));
-        if (found)
-        {
-            const float bw = static_cast<float>(bx1 - bx0 + 1);
-            const float bh = static_cast<float>(by1 - by0 + 1);
-            const float longSide = (bw > bh ? bw : bh);
-            const float pad = 4.0f; // 여백
-            side = longSide + 2.f * pad;
-
-            // 중심 기준 정사각 좌상단
-            const float cx = (bx0 + bx1) * 0.5f;
-            const float cy = (by0 + by1) * 0.5f;
-            sx0 = cx - side * 0.5f;
-            sy0 = cy - side * 0.5f;
-
-            // 경계 클램프
-            if (sx0 < 0.f) sx0 = 0.f;
-            if (sy0 < 0.f) sy0 = 0.f;
-            if (sx0 + side > srcW) side = srcW - sx0;
-            if (sy0 + side > srcH) side = srcH - sy0;
-            if (side <= 1.f) side = 1.f;
-        }
-
-        // 3) 28×28 bilinear 리샘플 (반전 그레이)
-        std::vector<float> img28;
-        resample_bilinear_28_from_bgra(src, srcW, srcH, sx0, sy0, side, img28);
-
-        // 4) 가우시안 블러(노이즈 억제)
-        gaussian_blur_5x5(img28);
-
-        // 5) Otsu 임계화 (바이너리 마스크 생성)
-        const float th = otsu_threshold_0_1(img28);
-        std::vector<float> mask28(img28.size(), 0.f);
-        for (size_t i = 0; i < img28.size(); ++i)
-            mask28[i] = (img28[i] >= th) ? 1.f : 0.f;
-
-        // 6) 중심 모멘트 기반 중앙화 (질량중심을 (13.5,13.5)로 이동)
-        auto [cx, cy] = centroid(mask28); // 바이너리 기준
-        const double target = 13.5;       // 0..27 중심
-        const double dx = cx - target;
-        const double dy = cy - target;
-
-        std::vector<float> centered28;
-        translate_bilinear_28(img28, dx, dy, centered28);
-
-        // 7) z-score 표준화 (MNIST/PyTorch 일반값)
-        //    주의: 모델이 0..1 입력을 기대한다면 이 단계를 제거/비활성화해야 할 수 있습니다.
-        constexpr float MEAN = 0.1307f;
-        constexpr float STD = 0.3081f;
-        zscore_normalize(centered28, MEAN, STD);
-
-        outTensor28x28 = std::move(centered28);
-        co_return true;
     }
 }
 ```
