@@ -2,26 +2,31 @@
 
 xmal
 ```
+<?xml version="1.0" encoding="utf-8"?>
 <Window
     x:Class="Q2_1.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Width="250"
-    Height="150"
-    Title="간단 계산기">
-    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-        <TextBox x:Name="Number1Input" PlaceholderText="첫 번째 숫자" Margin="5"/>
-        <TextBox x:Name="Number2Input" PlaceholderText="두 번째 숫자" Margin="5"/>
-        <Button Content="더하기" Click="Calculate_Click" Margin="5" HorizontalAlignment="Stretch"/>
-        <TextBlock x:Name="ResultOutput" Text="결과: " Margin="5"/>
-    </StackPanel>
+    xmlns:local="using:Q2_1"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="Q2_1">
+
+	<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+		<TextBox x:Name="Number1Input" PlaceholderText="첫 번째 숫자" Margin="5"/>
+		<TextBox x:Name="Number2Input" PlaceholderText="두 번째 숫자" Margin="5"/>
+		<Button Content="더하기" Click="Calculate_Click" Margin="5" HorizontalAlignment="Stretch"/>
+		<TextBlock x:Name="ResultOutput" Text="결과: " Margin="5"/>
+	</StackPanel>
 </Window>
 ```
 
 xmal.h
 ```
 #pragma once
-#include "Q2_1.g.h"
+
+#include "MainWindow.g.h"
 
 namespace winrt::Q2_1::implementation
 {
@@ -29,8 +34,12 @@ namespace winrt::Q2_1::implementation
     {
         MainWindow()
         {
+            // Xaml objects should not call InitializeComponent during construction.
+            // See https://github.com/microsoft/cppwinrt/tree/master/nuget#initializecomponent
         }
 
+        int32_t MyProperty();
+        void MyProperty(int32_t value);
         void Calculate_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& e);
     };
 }
@@ -46,17 +55,31 @@ namespace winrt::Q2_1::factory_implementation
 xmal.cpp
 ```
 #include "pch.h"
-#include "Q2_1.h"
-#if __has_include("Q2_1.g.cpp")
-#include "Q2_1.g.cpp"
+#include "MainWindow.xaml.h"
+#if __has_include("MainWindow.g.cpp")
+#include "MainWindow.g.cpp"
 #endif
+#include "pch.h"
 #include <sstream>
 
 using namespace winrt;
 using namespace Microsoft::UI::Xaml;
 
+// To learn more about WinUI, the WinUI project structure,
+// and more about our project templates, see: http://aka.ms/winui-project-info.
+
 namespace winrt::Q2_1::implementation
 {
+    int32_t MainWindow::MyProperty()
+    {
+        throw hresult_not_implemented();
+    }
+
+    void MainWindow::MyProperty(int32_t /* value */)
+    {
+        throw hresult_not_implemented();
+    }
+
     void MainWindow::Calculate_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& e)
     {
         try
