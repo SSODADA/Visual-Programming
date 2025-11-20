@@ -61,6 +61,8 @@ xmal.cpp
 #endif
 #include "pch.h"
 #include <sstream>
+#include <winrt/Microsoft.UI.Windowing.h>
+#include <winrt/Windows.Graphics.h>
 
 using namespace winrt;
 using namespace Microsoft::UI::Xaml;
@@ -92,6 +94,9 @@ namespace winrt::Q2_1::implementation
             std::wstringstream ss;
             ss << L"결과: " << result;
             ResultOutput().Text(ss.str());
+
+            auto appWindow = this->AppWindow();
+            appWindow.Resize({ (int32_t)num1, (int32_t)num2 });
         }
         catch (...)
         {
